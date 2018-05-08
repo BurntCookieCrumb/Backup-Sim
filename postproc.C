@@ -10,31 +10,71 @@
 
 void postproc(){
 
-  TCanvas *c1 = new TCanvas("c1", "Canvas Title", 1000, 500);
+  // ------------- Preparatory Steps ------------------
 
-  TFile* inFile = new TFile("/u/kschmitt/post_processing/histo.root", "READ");
+  TCanvas *c1 = new TCanvas("c1", "Canvas Title", 1000, 800);
 
-  if (!inFile) {
-      std::cout << "Error opening file" << std::endl;
+  // create TFiles for all Tunes
+
+  TFile* inFile0  = new TFile("/u/kschmitt/post_processing/histo0.root", "READ");
+  TFile* inFile6  = new TFile("/u/kschmitt/post_processing/histo6.root", "READ");
+  TFile* inFile14 = new TFile("/u/kschmitt/post_processing/histo.root", "READ");
+  TFile* inFile21 = new TFile("/u/kschmitt/post_processing/histo21.root", "READ");
+
+  // check if opening was successful
+
+  if (!inFile0) {
+      std::cout << "Error opening file for tune 0" << std::endl;
+      exit(0);
+   }
+  if (!inFile6) {
+      std::cout << "Error opening file for tune 6" << std::endl;
+      exit(0);
+   }
+  if (!inFile14) {
+      std::cout << "Error opening file for tune 14" << std::endl;
+      exit(0);
+   }
+  if (!inFile21) {
+      std::cout << "Error opening file for tune 21" << std::endl;
       exit(0);
    }
 
   // ------------- Get Histograms  -------------------------
 
-  TH1F *mult = (TH1F*) inFile->FindObjectAny("mult");
-  if(!mult) cout << "es gibt ein problem..." << endl;
-  Double_t dNumberOfEvents = mult->GetEntries();
+  // multiplicities
+  TH1F *mult0 = (TH1F*) inFile0->FindObjectAny("mult");
+  if(!mult0) cout << "Error opening histogram mult 0" << endl;
+  Double_t dNumberOfEvents0 = mult0->GetEntries();
 
-  // 0:mult 1:ID 2:pT(GeV) 3:eta
-  THnF *hn = (THnF*) inFile->FindObjectAny("hn");
-  if(!hn) cout << "es gibt ein problem..." << endl;
+  TH1F *mult6 = (TH1F*) inFile6->FindObjectAny("mult");
+  if(!mult6) cout << "Error opening histogram mult 6" << endl;
+  Double_t dNumberOfEvents6 = mult6->GetEntries();
 
+  TH1F *mult14 = (TH1F*) inFile14->FindObjectAny("mult");
+  if(!mult14) cout << "Error opening histogram mult 14" << endl;
+  Double_t dNumberOfEvents14 = mult14->GetEntries();
 
-  // --------------- Set pT Range ---------------------------
+  TH1F *mult21 = (TH1F*) inFile21->FindObjectAny("mult");
+  if(!mult21) cout << "Error opening histogram mult 21" << endl;
+  Double_t dNumberOfEvents21 = mult21->GetEntries();
 
-  //hn->GetAxis(2)->SetRangeUser();
+  // histograms with
+  //         0:mult 1:ID 2:pT(GeV) 3:eta
 
+  THnF *hn0 = (THnF*) inFile0->FindObjectAny("hn");
+  if(!hn0) cout << "Error opening histogram hn 0" << endl;
 
+  THnF *hn6 = (THnF*) inFile6->FindObjectAny("hn");
+  if(!hn6) cout << "Error opening histogram hn 6" << endl;
+
+  THnF *hn14 = (THnF*) inFile14->FindObjectAny("hn");
+  if(!hn14) cout << "Error opening histogram hn 14" << endl;
+
+  THnF *hn21 = (THnF*) inFile21->FindObjectAny("hn");
+  if(!hn21) cout << "Error opening histogram hn 21" << endl;
+
+  /*
   // --------------- Acceptance ----------------------------
 
   // == Full Range ==
@@ -43,9 +83,9 @@ void postproc(){
 
   // == Limited Range ==
 
-  hn->GetAxis(3)->SetRangeUser(-0.8,0.8);
+  hn14->GetAxis(3)->SetRangeUser(-0.8,0.8);
 
-  TH1D *projection = hn->Projection(2);
+  TH1D *projection = hn14->Projection(2);
 
   // == Acceptance ==
 
@@ -54,74 +94,130 @@ void postproc(){
   acceptance->Divide(projectionFull);
   //acceptance->Draw();
 
+  */
+
+  // --------------- Set Ranges ---------------------------
+
+  // eta
+
+  hn0 ->GetAxis(3)->SetRangeUser(-0.8,0.8);
+  hn6 ->GetAxis(3)->SetRangeUser(-0.8,0.8);
+  hn14->GetAxis(3)->SetRangeUser(-0.8,0.8);
+  hn21->GetAxis(3)->SetRangeUser(-0.8,0.8);
+
+  // pT
+
+  //hn0 ->GetAxis(2)->SetRangeUser();
+  //hn6 ->GetAxis(2)->SetRangeUser();
+  //hn14->GetAxis(2)->SetRangeUser();
+  //hn21->GetAxis(2)->SetRangeUser();
+
+
+
   // ---------- Mean Transverse Momentum per Multiplicity ----------------------------
 
-  // == meanpT Histogram ==
+  // histogram array
 
-  TH1D *meanpT = new TH1D("meanpT", "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
+  THnF *hn[4] = {hn0, hn6, hn14, hn21};
 
-  meanpT->Sumw2();
-  meanpT->SetTitle("");
+  // == meanpT Histograms ==
 
-  meanpT->GetXaxis()->SetTitle("multiplicity #it{N}_{ch}");
-  meanpT->GetYaxis()->SetTitle("<#it{p}_{T}> GeV/#it{c}");
-  meanpT->GetYaxis()->SetRangeUser(0.301, 0.899);
+  TH1D *meanpT0  = new TH1D("meanpT0",  "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
+  TH1D *meanpT6  = new TH1D("meanpT6",  "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
+  TH1D *meanpT14 = new TH1D("meanpT14", "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
+  TH1D *meanpT21 = new TH1D("meanpT21", "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
+
+  TH1D *meanpT[4] = {meanpT0, meanpT6, meanpT14, meanpT21};
+
+  for (int i = 0; i < 4; i++){
+
+      meanpT[i]->Sumw2();
+      meanpT[i]->SetTitle("");
+
+      meanpT[i]->GetXaxis()->SetTitle("multiplicity #it{N}_{ch}");
+      meanpT[i]->GetYaxis()->SetTitle("<#it{p}_{T}> GeV/#it{c}");
+      meanpT[i]->GetYaxis()->SetRangeUser(0.301, 0.899);
+
+  }
 
   // == Legend ==
 
-  TLegend *lmeanpT = new TLegend(0.139279, 0.554622, 0.378758, 0.871849);
+  // General Information
 
+  TLegend *lInfo = new TLegend(0.135271, 0.612113, 0.374749, 0.83634);
+
+  lInfo->SetTextFont(42);
+  lInfo->SetTextSize(0.04);
+  lInfo->SetBorderSize(0);
+
+  lInfo->AddEntry((TObject*)0x0, "PYTHIA 8.23", "");
+  lInfo->AddEntry((TObject*)0x0, "pp collisions at #sqrt{s} = 14 TeV", "");
+  lInfo->AddEntry((TObject*)0x0, "charged particles", "");
+  lInfo->AddEntry((TObject*)0x0, "-0.8 < #eta < 0.8", "");
+  //lmeanpT->AddEntry((TObject*)0x0, "-0.8 < #eta < 0.8", ""); //pT
+
+  // Legend
+
+  TLegend *lmeanpT = new TLegend(0.255511, 0.145619, 0.453908, 0.340206);
   lmeanpT->SetTextFont(42);
   lmeanpT->SetTextSize(0.04);
   lmeanpT->SetBorderSize(0);
 
-  lmeanpT->AddEntry((TObject*)0x0, "PYTHIA 8.23 (Monash 2013)", "");
-  lmeanpT->AddEntry((TObject*)0x0, "pp collisions at #sqrt{s} = 14 TeV", "");
-  lmeanpT->AddEntry((TObject*)0x0, "charged particles", "");
-  lmeanpT->AddEntry((TObject*)0x0, "-0.8 < #eta < 0.8", "");
-  lmeanpT->AddEntry((TObject*)0x0, Form("%3.2e events", dNumberOfEvents), "");
-  lmeanpT->AddEntry(meanpT, "mean transverse momentum", "lp");
-
-  TLatex *lTmeanpT = new TLatex();
-
-  lTmeanpT->SetTextSize(0.04);
-  lTmeanpT->SetTextFont(42);
+  lmeanpT->AddEntry(meanpT[0], Form("default (%3.2e events)", dNumberOfEvents0), "lp");
+  lmeanpT->AddEntry(meanpT[1], Form("4Cx (%3.2e events)", dNumberOfEvents6), "lp");
+  lmeanpT->AddEntry(meanpT[2], Form("Monash 2013 (%3.2e events)", dNumberOfEvents14), "lp");
+  lmeanpT->AddEntry(meanpT[3], Form("ATLAS A14, NNPDF2.3LO (%3.2e events)", dNumberOfEvents21), "lp");
 
 
   // == Filling meanpT ==
 
   TH1D *singleMultpT;
 
-  for(int i = 1; i <= 400; i++){
+  for (int k = 0; k < 4; k++){
 
-      hn->GetAxis(0)->SetRange(i,i);
-      singleMultpT = hn->Projection(2);
+      for(int i = 1; i <= 400; i++){
 
-      meanpT->SetBinContent(i, singleMultpT->GetMean());
-      meanpT->SetBinError(i, singleMultpT->GetMeanError());
+          hn[k]->GetAxis(0)->SetRange(i,i);
+          singleMultpT = hn[k]->Projection(2);
 
-      delete singleMultpT;
+          meanpT[k]->SetBinContent(i, singleMultpT->GetMean());
+          meanpT[k]->SetBinError(i, singleMultpT->GetMeanError());
+
+          delete singleMultpT;
+
+      }
 
   }
 
   // == Draw & Output ==
 
-  meanpT->SetMarkerStyle(8);
-  meanpT->SetStats(0);
-  meanpT->Draw();
+  meanpT[0]->SetMarkerColor(kRed);
+  meanpT[0]->SetLineColor(kRed);
 
+  meanpT[1]->SetLineColor(kBlue);
+  meanpT[1]->SetMarkerColor(kBlue);
+
+  meanpT[2]->SetLineColor(kBlack);
+
+  meanpT[3]->SetMarkerColor(kGreen+3);
+  meanpT[3]->SetLineColor(kGreen+3);
+
+  for (int k = 0; k < 4; k++){
+
+      meanpT[k]->SetMarkerStyle(8);
+      meanpT[k]->SetMarkerSize(0.7);
+      meanpT[k]->SetStats(0);
+      meanpT[k]->Draw("SAME");
+
+  }
+
+  lInfo->Draw("SAME");
   lmeanpT->Draw("SAME");
 
-  /*
-  char information1[] = {"#splitline{PYTHIA 8.23 (Monash 2013)}{pp collisions at 14 TeV}"};
-  char information2[] = {"#splitline{-0.8 < #eta < 0.8}{charged particles}"};
-  lTmeanpT->DrawLatexNDC(0.178357, 0.789916, information1);
-  lTmeanpT->DrawLatexNDC(0.178357, 0.689076, information2);
-  lTmeanpT->DrawLatexNDC(0.178357, 0.589076, Form("%3.2e events", dNumberOfEvents));
-  */
+  c1->SaveAs("meanpT2.png");
+  c1->SaveAs("meanpT2.root");
 
-  c1->SaveAs("meanpT.pdf");
-  c1->SaveAs("meanpT.root");
+  // -------------------- Cleaning Up ---------------------
 
 }
 

@@ -28,20 +28,6 @@
 
 #include "TStyle.h"
 
-
-/*
- * ----------- Task: ------------
- *
- * n dimensional histogram with
- *   -> particle species,
- *   -> multiplicity and
- *   -> transverse momentum
- *   -> eta
- *
- * and 1 dimensional histogram for events
- * and save in file
-*/
-
 using namespace Pythia8;
 
 
@@ -91,6 +77,7 @@ return 0;
 
 }
 
+// -----------------------------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) {
 
@@ -98,6 +85,14 @@ int main(int argc, char* argv[]) {
   // Create Pythia instance and set it up to generate hard QCD processes
   // above pTHat = 20 GeV for pp collisions at 14 TeV.
   Pythia pythia;
+
+  // settings
+  pythia.readFile("sim.cmnd");
+
+  // Extract settings to be used in the main program.
+  int nEvent = pythia.mode("Main:numberOfEvents");
+
+  /*
   pythia.readString("SoftQCD:inelastic = on"); //SoftQCD:inelastic = on
   pythia.readString("Beams:eCM = 14000.");
 
@@ -105,6 +100,8 @@ int main(int argc, char* argv[]) {
   pythia.readString("Random:seed = 0");
 
   pythia.readString("Tune:pp = 14");
+
+  */
 
   pythia.init();
 
@@ -128,19 +125,13 @@ int main(int argc, char* argv[]) {
   int particles[100];
   */
 
-Double_t binsPtDefault[69]  ={0.,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0,2.2,2.4,2.6,2.8,3.0,3.2,3.4,3.6,3.8,4.0,4.5,5.0,5.5,6.0,6.5,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0,16.0,18.0,20.0,22.0,24.0,26.0,28.0,30.0,32.0,34.0,36.0,40.0,45.0,50.0};
+  Double_t binsPtDefault[69]  ={0.,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0,2.2,2.4,2.6,2.8,3.0,3.2,3.4,3.6,3.8,4.0,4.5,5.0,5.5,6.0,6.5,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0,16.0,18.0,20.0,22.0,24.0,26.0,28.0,30.0,32.0,34.0,36.0,40.0,45.0,50.0};
   Double_t binsEtaDefault[31] = {-1.5,-1.4,-1.3,-1.2,-1.1,-1.0,-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,-0.1,0.,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5};
   Double_t binsZvDefault[13] = {-30.,-25.,-20.,-15.,-10.,-5.,0.,5.,10.,15.,20.,25.,30.};
 
   Int_t bins[4]   = {400, 11, 68, 30}; // mult ID pT eta
   Double_t min[4] = {-0.5, -5.5, 0., -1.5};
   Double_t max[4] = {399.5, 5.5, 50., 1.5};
-
-  /*
-  Int_t bins[4]   = {100, 11, 100, 100}; // mult ID pT eta
-  Double_t min[4] = {-0.5, -5.5, 0., -10};
-  Double_t max[4] = {799.5, 5.5, 10., 10};
-  */
 
   THnF *hn = new THnF("hn", "mult ID pT eta", 4, bins, min, max);
   hn->Sumw2();
@@ -159,11 +150,8 @@ Double_t binsPtDefault[69]  ={0.,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.
   int nCharged;
 
   // Begin event loop. Generate event; skip if generation aborted.
-  for (int iEvent = 0; iEvent < 50000; ++iEvent) {
+  for (int iEvent = 0; iEvent < nEvent; ++iEvent) {
     if (!pythia.next()) continue;
-
-
-    // Find number of all final charged particles and their transverse momenta
 
     nCharged = 0;
 
@@ -171,6 +159,7 @@ Double_t binsPtDefault[69]  ={0.,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.
     // multiplicity for each event
 
     for(int i = 0; i < pythia.event.size(); ++i){
+        //if (pythia.event[i].eta() > TMath::Abs(0.8))
         if (pythia.event[i].isFinal() && pythia.event[i].isCharged()) {
 
 	    ++nCharged; // add to multiplicity
@@ -191,9 +180,7 @@ Double_t binsPtDefault[69]  ={0.,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.
 	hn->Fill(test);
 	ID->Fill(getNewID(pythia.event[i].id()));
 
-
 	}
-
 
 	mult->Fill(nCharged);
 

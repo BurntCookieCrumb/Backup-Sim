@@ -1,223 +1,275 @@
 
-// ~~ TITLE ~~
+// ~~ POSTPROCESSING ~~
 
-#include "TH1.h"
-#include "TH2.h"
-#include "THn.h"
-#include "TFile.h"
-#include <iostream>
+// --------------------------------------------------------------------------------------
+// Information or so..
+//
+// --------------------------------------------------------------------------------------
 
+// == Includes ==
 
-void postproc(){
+#include "Plotting.h"
+#include "postproc.h"
 
-  // ------------- Preparatory Steps ------------------
 
-  TCanvas *c1 = new TCanvas("c1", "Canvas Title", 1000, 800);
+// == Namespace ==
 
-  // create TFiles for all Tunes
+using namespace std;
 
-  TFile* inFile0  = new TFile("/u/kschmitt/post_processing/histo0.root", "READ");
-  TFile* inFile6  = new TFile("/u/kschmitt/post_processing/histo6.root", "READ");
-  TFile* inFile14 = new TFile("/u/kschmitt/post_processing/histo.root", "READ");
-  TFile* inFile21 = new TFile("/u/kschmitt/post_processing/histo21.root", "READ");
+// ------------------------------------------------------------------------------------
+// postprocessing
+// ------------------------------------------------------------------------------------
 
-  // check if opening was successful
+void postproc() {
 
-  if (!inFile0) {
-      std::cout << "Error opening file for tune 0" << std::endl;
-      exit(0);
-   }
-  if (!inFile6) {
-      std::cout << "Error opening file for tune 6" << std::endl;
-      exit(0);
-   }
-  if (!inFile14) {
-      std::cout << "Error opening file for tune 14" << std::endl;
-      exit(0);
-   }
-  if (!inFile21) {
-      std::cout << "Error opening file for tune 21" << std::endl;
-      exit(0);
-   }
+    /** Reads in Files containing Data of different energies from Simulations with different tunes
+        and from Experiments, extracts the corresponding histograms and uses these to derive
+        Histograms meanpT <-> nCh, which will then be plotted corresponding to energy.
+    **/
 
-  // ------------- Get Histograms  -------------------------
+    // --------- Read in all Files ---------
 
-  // multiplicities
-  TH1F *mult0 = (TH1F*) inFile0->FindObjectAny("mult");
-  if(!mult0) cout << "Error opening histogram mult 0" << endl;
-  Double_t dNumberOfEvents0 = mult0->GetEntries();
+    const Int_t nTunes = 4;
+    const Int_t nEnergies = 4;
 
-  TH1F *mult6 = (TH1F*) inFile6->FindObjectAny("mult");
-  if(!mult6) cout << "Error opening histogram mult 6" << endl;
-  Double_t dNumberOfEvents6 = mult6->GetEntries();
+    Double_t energies[nEnergies] = {5.02, 7., 8., 13.};
+    Int_t tunes[nTunes] = {0, 6, 14, 21};
+    TString nameTune[nTunes] = {"default", "4Cx", "Monash 2013", "ATLAS A14, NNPDF2.3LO"};
 
-  TH1F *mult14 = (TH1F*) inFile14->FindObjectAny("mult");
-  if(!mult14) cout << "Error opening histogram mult 14" << endl;
-  Double_t dNumberOfEvents14 = mult14->GetEntries();
+    TFile *inFiles[nEnergies][nTunes];
+    TH1F *mult[nEnergies][nTunes];
+    THnF *histograms[nEnergies][nTunes];
+    Double_t nEvents[nEnergies][nTunes];
 
-  TH1F *mult21 = (TH1F*) inFile21->FindObjectAny("mult");
-  if(!mult21) cout << "Error opening histogram mult 21" << endl;
-  Double_t dNumberOfEvents21 = mult21->GetEntries();
 
-  // histograms with
-  //         0:mult 1:ID 2:pT(GeV) 3:eta
+    TFile *inData;
+    TH2D *data[nEnergies];
 
-  THnF *hn0 = (THnF*) inFile0->FindObjectAny("hn");
-  if(!hn0) cout << "Error opening histogram hn 0" << endl;
+    // Read Simulations
 
-  THnF *hn6 = (THnF*) inFile6->FindObjectAny("hn");
-  if(!hn6) cout << "Error opening histogram hn 6" << endl;
+    for (int energy = 0; energy < nEnergies; energy++){
+        for (int tune = 0; tune < nTunes; tune++){
 
-  THnF *hn14 = (THnF*) inFile14->FindObjectAny("hn");
-  if(!hn14) cout << "Error opening histogram hn 14" << endl;
+            inFiles[energy][tune] = new TFile(Form("./PYTHIA8/%dTeV/histo%d.root",
+                                                  (Int_t)energies[energy], tunes[tune]), "READ");
 
-  THnF *hn21 = (THnF*) inFile21->FindObjectAny("hn");
-  if(!hn21) cout << "Error opening histogram hn 21" << endl;
+            // Check if File was opened correctly
+            if (!inFiles[energy][tune]) {
+                    cout << "Error opening File " << energies[energy]
+                                                  << " TeV histo" << tunes[tune] << endl;
+                    exit(0);
+                }
 
-  /*
-  // --------------- Acceptance ----------------------------
+            // Get Histograms
+            mult[energy][tune] = (TH1F*) inFiles[energy][tune]->FindObjectAny("mult");
+            if(!mult[energy][tune]){
+                 cout << "Error opening histogram mult " << energies[energy]
+                      << " TeV/ Tune " << tunes[tune]<< endl;
+            }
 
-  // == Full Range ==
+            nEvents[energy][tune] = mult[energy][tune]->GetEntries();
 
-  TH1D *projectionFull = hn->Projection(2);
+            // histograms with
+            //         0:mult 1:ID 2:pT(GeV) 3:eta
+            histograms[energy][tune] = (THnF*) inFiles[energy][tune]->FindObjectAny("hn");
+            if(!histograms[energy][tune]){
+                 cout << "Error opening histogram hn " << energies[energy]
+                      << " TeV/ Tune " << tunes[tune]<< endl;
+            }
 
-  // == Limited Range ==
+        }
+    }
 
-  hn14->GetAxis(3)->SetRangeUser(-0.8,0.8);
+    // Read Data
 
-  TH1D *projection = hn14->Projection(2);
+    inData = new TFile("./Daten/ptSpectraUnfolded.root", "READ");
 
-  // == Acceptance ==
+    for (int energy = 0; energy < nEnergies; energy++){
 
-  TH1D *acceptance = (TH1D*)projection->Clone("acceptance");
+        data[energy] = (TH2D*) inData->FindObjectAny(Form("multPtUnfolded_pp_%dTeV_eta08", (int)energies[energy]));
 
-  acceptance->Divide(projectionFull);
-  //acceptance->Draw();
+        if(!data[energy]) cout << "Error opening histogram data " << energies[energy] << " TeV"<< endl;
 
-  */
+    }
 
-  // --------------- Set Ranges ---------------------------
 
-  // eta
+    // ---------- Set Ranges --------------
 
-  hn0 ->GetAxis(3)->SetRangeUser(-0.8,0.8);
-  hn6 ->GetAxis(3)->SetRangeUser(-0.8,0.8);
-  hn14->GetAxis(3)->SetRangeUser(-0.8,0.8);
-  hn21->GetAxis(3)->SetRangeUser(-0.8,0.8);
+    for (int energy = 0; energy < nEnergies; energy++){
+        for (int tune = 0; tune < nTunes; tune++){
 
-  // pT
+            // eta
 
-  //hn0 ->GetAxis(2)->SetRangeUser();
-  //hn6 ->GetAxis(2)->SetRangeUser();
-  //hn14->GetAxis(2)->SetRangeUser();
-  //hn21->GetAxis(2)->SetRangeUser();
+            histograms[energy][tune]->GetAxis(3)->SetRangeUser(-0.8,0.8);
 
+            // pT
 
+            histograms[energy][tune]->GetAxis(2)->SetRangeUser(0.15, 9.99);
 
-  // ---------- Mean Transverse Momentum per Multiplicity ----------------------------
+        }
 
-  // histogram array
+        // data
 
-  THnF *hn[4] = {hn0, hn6, hn14, hn21};
+        data[energy]->GetYaxis()->SetRangeUser(0.15, 9.99);
 
-  // == meanpT Histograms ==
+    }
 
-  TH1D *meanpT0  = new TH1D("meanpT0",  "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
-  TH1D *meanpT6  = new TH1D("meanpT6",  "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
-  TH1D *meanpT14 = new TH1D("meanpT14", "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
-  TH1D *meanpT21 = new TH1D("meanpT21", "mean transverse momentum per multiplicity", 400, -0.5, 399.5);
+    // ------ Getting Mean Spectra --------
 
-  TH1D *meanpT[4] = {meanpT0, meanpT6, meanpT14, meanpT21};
+    TH1D* meanpT[nEnergies][nTunes];
 
-  for (int i = 0; i < 4; i++){
+    for (int energy = 0; energy < nEnergies; energy++){
+        for (int tune = 0; tune < nTunes; tune++){
 
-      meanpT[i]->Sumw2();
-      meanpT[i]->SetTitle("");
+            // Initialize meanpT Histogram for each energy and each tune
 
-      meanpT[i]->GetXaxis()->SetTitle("multiplicity #it{N}_{ch}");
-      meanpT[i]->GetYaxis()->SetTitle("<#it{p}_{T}> GeV/#it{c}");
-      meanpT[i]->GetYaxis()->SetRangeUser(0.301, 0.899);
+            meanpT[energy][tune] = new TH1D(Form("meanpT%d/%d", (int)energies[energy], tunes[tune]), "", 200, -0.5, 199.5);
 
-  }
+            meanpT[energy][tune]->Sumw2();
 
-  // == Legend ==
 
-  // General Information
+            // Fill said Histograms
 
-  TLegend *lInfo = new TLegend(0.135271, 0.612113, 0.374749, 0.83634);
+            GetMeanpT(meanpT[energy][tune], histograms[energy][tune], 2, 0, 200);
 
-  lInfo->SetTextFont(42);
-  lInfo->SetTextSize(0.04);
-  lInfo->SetBorderSize(0);
+            SetHistogramProperties(meanpT[energy][tune], "", "<#it{p}_{T}> (GeV/#it{c})", tune + 1);
+            meanpT[energy][tune]->GetYaxis()->SetRangeUser(0.24, 0.86);
 
-  lInfo->AddEntry((TObject*)0x0, "PYTHIA 8.23", "");
-  lInfo->AddEntry((TObject*)0x0, "pp collisions at #sqrt{s} = 14 TeV", "");
-  lInfo->AddEntry((TObject*)0x0, "charged particles", "");
-  lInfo->AddEntry((TObject*)0x0, "-0.8 < #eta < 0.8", "");
-  //lmeanpT->AddEntry((TObject*)0x0, "-0.8 < #eta < 0.8", ""); //pT
+        }
+    }
 
-  // Legend
+    TH1D* meanpT_data[nEnergies];
 
-  TLegend *lmeanpT = new TLegend(0.255511, 0.145619, 0.453908, 0.340206);
-  lmeanpT->SetTextFont(42);
-  lmeanpT->SetTextSize(0.04);
-  lmeanpT->SetBorderSize(0);
+    for (int energy = 0; energy < nEnergies; energy++){
 
-  lmeanpT->AddEntry(meanpT[0], Form("default (%3.2e events)", dNumberOfEvents0), "lp");
-  lmeanpT->AddEntry(meanpT[1], Form("4Cx (%3.2e events)", dNumberOfEvents6), "lp");
-  lmeanpT->AddEntry(meanpT[2], Form("Monash 2013 (%3.2e events)", dNumberOfEvents14), "lp");
-  lmeanpT->AddEntry(meanpT[3], Form("ATLAS A14, NNPDF2.3LO (%3.2e events)", dNumberOfEvents21), "lp");
+        // Initialize meanpT Histogram for each energy and each tune
 
+        meanpT_data[energy] = new TH1D(Form("meanpT_data%d", (int)energies[energy]), "", 200, -0.5, 199.5);
 
-  // == Filling meanpT ==
+        meanpT_data[energy]->Sumw2();
 
-  TH1D *singleMultpT;
+        // Fill said Histograms
 
-  for (int k = 0; k < 4; k++){
+        GetMeanpT(meanpT_data[energy], data[energy], 200);
 
-      for(int i = 1; i <= 400; i++){
+        SetHistogramProperties(meanpT_data[energy], "", "<#it{p}_{T}> (GeV/#it{c})", 0);
+        meanpT_data[energy]->SetMarkerStyle(kFullDiamond);
 
-          hn[k]->GetAxis(0)->SetRange(i,i);
-          singleMultpT = hn[k]->Projection(2);
+    }
 
-          meanpT[k]->SetBinContent(i, singleMultpT->GetMean());
-          meanpT[k]->SetBinError(i, singleMultpT->GetMeanError());
+    // ------------ Ratios --------------
 
-          delete singleMultpT;
+    TH1D *ratios[nEnergies][nTunes];
 
-      }
+    for (int energy = 0; energy < nEnergies; energy++){
+        for (int tune = 0; tune < nTunes; tune++){
 
-  }
+            ratios[energy][tune] = (TH1D*)meanpT_data[energy]->Clone(Form("ratio%d/%d", (int)energies[energy], tunes[tune]));
 
-  // == Draw & Output ==
+            ratios[energy][tune]->Divide(meanpT[energy][tune]);
 
-  meanpT[0]->SetMarkerColor(kRed);
-  meanpT[0]->SetLineColor(kRed);
+            SetHistogramProperties(ratios[energy][tune], "multiplicity #it{N}_{ch}", "Ratio", tune + 1);
+            ratios[energy][tune]->GetYaxis()->SetRangeUser(0.85, 1.16);
 
-  meanpT[1]->SetLineColor(kBlue);
-  meanpT[1]->SetMarkerColor(kBlue);
+        }
+    }
 
-  meanpT[2]->SetLineColor(kBlack);
 
-  meanpT[3]->SetMarkerColor(kGreen+3);
-  meanpT[3]->SetLineColor(kGreen+3);
 
-  for (int k = 0; k < 4; k++){
 
-      meanpT[k]->SetMarkerStyle(8);
-      meanpT[k]->SetMarkerSize(0.7);
-      meanpT[k]->SetStats(0);
-      meanpT[k]->Draw("SAME");
+    // ------------ Plotting --------------
 
-  }
+    for (int energy = 0; energy < nEnergies; energy++){
 
-  lInfo->Draw("SAME");
-  lmeanpT->Draw("SAME");
+        // == Dashed Line for Ratio at 1 ==
 
-  c1->SaveAs("meanpT2.png");
-  c1->SaveAs("meanpT2.root");
+        TLine *one = new TLine(0., 1., 50., 1);
+        one->SetLineStyle(9);
+        one->SetLineWidth(2);
+        one->SetLineColor(kBlack);
 
-  // -------------------- Cleaning Up ---------------------
+        // == Legends ==
+
+        TLegend *lInfo = new TLegend(0.123762 , 0.673071, 0.363861, 0.854834);
+
+        lInfo->SetTextFont(42);
+        lInfo->SetTextSize(0.03);
+        lInfo->SetBorderSize(0);
+
+        lInfo->AddEntry((TObject*)0x0, "PYTHIA 8.23", "");
+        lInfo->AddEntry((TObject*)0x0, Form("pp collisions at #sqrt{s} = %.2lf TeV", energies[energy]), "");
+        lInfo->AddEntry((TObject*)0x0, "charged particles", "");
+        lInfo->AddEntry((TObject*)0x0, "-0.8 < #eta < 0.8", "");
+        lInfo->AddEntry((TObject*)0x0, "0.15 GeV/#it{c} < #it{p}_{T}", ""); //pT
+
+
+        TLegend *lmeanpT = new TLegend(0.167079, 0.031412, 0.365099, 0.224154);
+
+        lmeanpT->SetTextFont(42);
+        lmeanpT->SetTextSize(0.03);
+        lmeanpT->SetBorderSize(0);
+
+        lmeanpT->AddEntry(meanpT_data[energy], "data", "lp");
+
+        // == TObject Arrays ==
+
+        TObjArray* hist = new TObjArray();
+        TObjArray* ratio = new TObjArray();
+
+
+        for (int tune = 0; tune < nTunes; tune++){
+
+            lmeanpT->AddEntry(meanpT[energy][tune], legendEntry(nameTune[tune], nEvents[energy][tune]), "lp");
+
+            hist->Add(meanpT[energy][tune]);
+            ratio->Add(ratios[energy][tune]);
+
+
+
+        }
+
+        hist->Add(meanpT_data[energy]);
+
+        hist->Add(lInfo);
+        hist->Add(lmeanpT);
+
+        ratio->Add(one);
+
+
+        TCanvas *output = makeCanvas(hist, ratio, "NoTime", 0, 0);
+
+        output->Update();
+        //output->SaveAs("test.png");
+        output->SaveAs(Form("Results/meanpT_vs_nCh_vglmitDaten_%dTeV.png", (int)energies[energy]));
+        output->SaveAs(Form("Results/meanpT_vs_nCh_vglmitDaten_%dTeV.root", (int)energies[energy]));
+
+        delete lInfo;
+        delete lmeanpT;
+
+        delete hist;
+        delete ratio;
+
+        delete output;
+
+    }
+
+
+    // ----- Cleaning Up ------------------
+
+
+    for (int energy = 0; energy < nEnergies; energy++){
+        for (int tune = 0; tune < nTunes; tune++){
+
+            inFiles[energy][tune]->Close();
+
+            delete meanpT[energy][tune];
+
+        }
+
+        delete meanpT_data[energy];
+
+    }
+
+    inData->Close();
 
 }
-

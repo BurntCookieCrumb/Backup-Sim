@@ -1,8 +1,18 @@
 
 // Includes
 
+#include <iostream>
+
 #include <string>
 #include "TString.h"
+
+#include "TH1.h"
+#include "TH2.h"
+#include "THn.h"
+
+#include "TFile.h"
+
+
 
 // ------------------------------------------------------------------------------------
 // helpful functions
@@ -130,6 +140,265 @@ void GetMeanpT(TH1D *meanpT, TH2D *source, int multBins = 200){
       }
 
 }
+
+// -------------------------------------------------------------------------------------
+
+void GetMoment(TH1* hist, Int_t order, Double_t &moment, Double_t &moment_error,
+               Double_t min, Double_t max, bool inv){
+
+    /** function to get the \order-th moment and the corresponding error of a one
+        dimensional Histogram in range \min to \max containing the yield which has to be
+        normalized to bin width.
+        \inv = @true means the histogram contains the invariant yield.
+    **/
+
+    if (!hist) exit(0);
+
+    // == Moment ==
+
+    Double_t sumWeighted = 0, sum = 0;
+    Double_t binCenter, binWeight, yield;
+    Double_t invCorr;
+
+    Double_t weightedQuantity;
+
+    for(int bin = hist->FindBin(min); bin <= hist->FindBin(max); bin++){
+
+        binCenter = hist->GetBinCenter(bin);
+        binWeight = hist->GetBinWidth(bin);
+
+        invCorr = (inv) ? binCenter : 1;
+
+        yield = hist->GetBinContent(bin) * invCorr;
+
+        sumWeighted += yield * TMath::Power(binCenter, order) * binWeight;
+        sum += yield * binWeight;
+
+    }
+
+    moment = (sum > 0) ? (sumWeighted / sum) : 0;
+
+    // == Error ==
+
+    Double_t errSumWeighted = 0;
+    Double_t yieldErr;
+
+    for(int bin = hist->FindBin(min); bin <= hist->FindBin(max); bin++){
+
+        binCenter = hist->GetBinCenter(bin);
+        binWeight = hist->GetBinWidth(bin);
+
+        invCorr = (inv) ? binCenter : 1;
+
+        yieldErr = hist->GetBinError(bin) * invCorr;
+
+        errSumWeighted += TMath::Power(yieldErr *
+                                       (TMath::Power(binCenter, order) - moment) *
+                                       binWeight, 2);
+
+    }
+
+    moment_error = (sum > 0) ? (TMath::Sqrt(errSumWeighted) / sum) : 0;
+
+}
+
+void GetCentralMoment(TH1* hist, Int_t order, Double_t &moment, Double_t &moment_error,
+                      Double_t min, Double_t max, bool inv){
+
+    /** function to get the \order-th central moment and the corresponding error of a
+        one dimensional Histogram in range \min to \max containing the yield which has to
+        be normalized to bin width.
+        \inv = @true means the histogram contains the invariant yield.
+    **/
+
+    if (!hist) exit(0);
+
+    // == Moment ==
+
+    // Get Mean and Corresponding Error
+
+    Double_t mean, mean_error;
+
+    GetMoment(hist, 1, mean, mean_error, min, max, inv);
+
+    // Get Central Moment
+
+    Double_t sumWeighted = 0, sum = 0;
+    Double_t binCenter, binWeight, yield;
+    Double_t invCorr;
+
+    Double_t weightedQuantity;
+
+    for(int bin = hist->FindBin(min); bin <= hist->FindBin(max); bin++){
+
+        binCenter = hist->GetBinCenter(bin);
+        binWeight = hist->GetBinWidth(bin);
+
+        invCorr = (inv) ? binCenter : 1;
+
+        yield = hist->GetBinContent(bin) * invCorr;
+
+        sumWeighted += yield * TMath::Power(binCenter - mean, order) * binWeight;
+        sum += yield * binWeight;
+
+    }
+
+
+    moment = (sum > 0) ? (sumWeighted / sum) : 0;
+
+    /// TO BE DONE CORRECTLY:
+
+    // == Error ==
+
+    Double_t errSumWeighted = 0;
+    Double_t yieldErr;
+
+    for(int bin = hist->FindBin(min); bin <= hist->FindBin(max); bin++){
+
+        binCenter = hist->GetBinCenter(bin);
+        binWeight = hist->GetBinWidth(bin);
+
+        invCorr = (inv) ? binCenter : 1;
+
+        yieldErr = hist->GetBinError(bin) * invCorr;
+
+        errSumWeighted += TMath::Power(yieldErr *
+                                       (TMath::Power(binCenter, order) - moment) *
+                                       binWeight, 2);
+
+    }
+
+    moment_error = (sum > 0) ? (TMath::Sqrt(errSumWeighted) / sum) : 0;
+
+}
+
+void GetCumulant (TH1* hist, Int_t order, Double_t &cumulant, Double_t &cumulant_error,
+                      Double_t min, Double_t max, bool inv){
+
+    /** function to get the \order-th cumulant and the corresponding error of a
+        one dimensional Histogram in range \min to \max containing the yield which has to
+        be normalized to bin width.
+        \inv = @true means the histogram contains the invariant yield.
+    **/
+
+    if (!hist) exit(0);
+
+    // == Cumulants ==
+
+    Double_t m1, m2, m3;
+    Double_t m1_error, m2_error, m3_error;
+
+    switch(order){
+
+        case 3: GetMoment(hist, 3, m3, m3_error, min, max, inv);
+        case 2: GetMoment(hist, 2, m2, m2_error, min, max, inv);
+        case 1: GetMoment(hist, 1, m1, m1_error, min, max, inv); break;
+
+    }
+
+    switch(order){
+
+        case 3  : cumulant = m3 - 3*m2*m1 + 2*m1*m1*m1; break;
+        case 2  : cumulant = m2 - m1*m1;                break;
+        case 1  : cumulant = m1;                        break;
+        default : cumulant = 0;                         break;
+
+    }
+
+    /// ERROR CALCULATION
+
+    // == ERROR ==
+
+    cumulant_error = m1_error;
+
+}
+
+void GetMomentHist(TH1D* dest, THnF *source, Int_t func_axis, Int_t var_axis, Char_t measure,
+                   Int_t order, Double_t func_min, Double_t func_max, bool norm = false,
+                   bool inv = false){
+
+    /** Fill a one dimensional Histogram \dest with the \order-th
+        \measure (moment, cumulant, central moment) of each multiplicity bin of a n
+        dimensional Histogram \source.
+        \norm = @true means that the input histogram is normalized to bin width.
+        \inv = @true means that the input histogram is the ivariant yield
+    **/
+
+    TH1D *singleMultpT;
+
+    Double_t moment, moment_error;
+
+    for(int multBin = 1; multBin <= source->GetAxis(var_axis)->GetNbins(); multBin ++){
+
+        source->GetAxis(var_axis)->SetRange(multBin, multBin);
+        singleMultpT = source->Projection(func_axis);
+
+        if(!norm) singleMultpT->Scale(1, "width");
+
+        switch(measure){
+
+        case 'M': GetMoment(singleMultpT, order, moment, moment_error, func_min, func_max,
+                            inv); break;
+        case 'Z': GetCentralMoment(singleMultpT, order, moment, moment_error, func_min,
+                                   func_max, inv); break;
+        case 'K': GetCumulant(singleMultpT, order, moment, moment_error, func_min, func_max,
+                              inv); break;
+        default : exit(0);
+
+        }
+
+        dest->SetBinContent(multBin, moment);
+        dest->SetBinError(multBin, moment_error);
+
+        delete singleMultpT;
+
+    }
+
+}
+
+void GetMomentHist(TH1D* dest, TH2D *source, Char_t measure, Int_t order, Double_t y_min,
+                   Double_t y_max, bool norm = true, bool inv = true){
+
+    /** Fill a one dimensional Histogram \dest with the \order-th
+        \measure (moment, cumulant, central moment)of each multiplicity bin of a 2
+        dimensional Histogram \source
+        \norm = @true means that the input histogram is normalized to bin width
+        \inv = @true means that the input histogram is the ivariant yield
+    **/
+
+    TH1D *singleMultpT;
+
+    Double_t moment, moment_error;
+
+    for(int multBin = 1; multBin <= source->GetXaxis()->GetNbins(); multBin ++){
+
+        singleMultpT = source->ProjectionY("singleMultpT", multBin, multBin);
+
+        if(!norm) singleMultpT->Scale(1, "width");
+
+        switch(measure) {
+
+        case 'M': GetMoment(singleMultpT, order, moment, moment_error, y_min, y_max, inv);
+                  break;
+        case 'Z': GetCentralMoment(singleMultpT, order, moment, moment_error, y_min, y_max,
+                                   inv);
+                  break;
+        case 'K': GetCumulant(singleMultpT, order, moment, moment_error, y_min, y_max, inv);
+                  break;
+
+
+        }
+
+        dest->SetBinContent(multBin, moment);
+        dest->SetBinError(multBin, moment_error);
+
+        delete singleMultpT;
+
+    }
+
+}
+
+// --------------------------------------------------------------------------------------
 
 TString niceExp(double x){
 
